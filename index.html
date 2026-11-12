@@ -68,6 +68,9 @@
     background-origin:border-box;background-clip:padding-box,border-box;
     box-shadow:0 22px 50px rgba(0,0,0,.6),0 0 0 1px rgba(0,0,0,.6)}
   .map-card svg{display:block;width:100%;height:auto}
+  .map-card svg *{vector-effect:non-scaling-stroke}
+  .ph{opacity:0;visibility:hidden;transition:opacity .9s,visibility 0s .9s}
+  .ph.on{opacity:1;visibility:visible;transition:opacity .9s .25s,visibility 0s}
   .grid{stroke:rgba(241,228,189,.06);stroke-width:.5}
   .land{fill:var(--land);stroke:var(--land-edge);stroke-width:.8;stroke-linejoin:round}
   .route-dim{stroke:rgba(241,228,189,.28);stroke-width:1.1;stroke-dasharray:3 3;fill:none}
@@ -171,12 +174,15 @@
     <svg id="map" viewBox="0 0 400 230" role="img" aria-label="바울의 선교여행 지도">
       <defs><radialGradient id="seaGrad" cx="50%" cy="40%" r="75%"><stop offset="0%" stop-color="#18325e"/><stop offset="100%" stop-color="#091226"/></radialGradient></defs>
       <rect width="400" height="230" fill="url(#seaGrad)"/>
-      <g id="grid"></g><g id="lands"></g><g id="routeDim"></g><g id="routeDone"></g><g id="cities"></g>
-      <circle class="pulse" id="pulse" r="4"/>
-      <g class="paul" id="paul">
-        <circle class="halo" r="7" fill="rgba(255,213,110,.22)"/>
-        <circle r="4.2" fill="#ffd56e" stroke="#fff" stroke-width="1"/>
-        <path d="M0,-2.3 V2.3 M-1.7,-.6 H1.7" stroke="#2a1d05" stroke-width="1" stroke-linecap="round"/>
+      <g id="grid"></g>
+      <g id="world">
+        <g id="lands"></g><g id="phases"></g>
+        <circle class="pulse" id="pulse" r="4"/>
+        <g class="paul" id="paul">
+          <circle class="halo" r="7" fill="rgba(255,213,110,.22)"/>
+          <circle r="4.2" fill="#ffd56e" stroke="#fff" stroke-width="1"/>
+          <path d="M0,-2.3 V2.3 M-1.7,-.6 H1.7" stroke="#2a1d05" stroke-width="1" stroke-linecap="round"/>
+        </g>
       </g>
     </svg>
     <div class="badge" id="badge">1ST JOURNEY</div>
@@ -189,7 +195,7 @@
     <div class="laps-head"><div>#</div><div>도시</div><div>구간</div><div>총시간</div></div>
     <div class="laps" id="laps"><div class="laps-empty" id="lapsEmpty">LAP을 누르면 지금 있는 도시와 구간 기록이 남습니다</div></div>
   </div>
-  <div class="stats"><span>완주 <b id="stComp">0</b>회</span><span>누적 <b id="stTotal">00:00</b></span><span>방문 <b id="stCity">1</b>/19</span></div>
+  <div class="stats"><span>완주 <b id="stComp">0</b>회</span><span>누적 <b id="stTotal">00:00</b></span><span>방문 <b id="stCity">1</b>/<span id="stN">24</span></span></div>
   <div class="keys"><kbd>Space</kbd> 시작/정지 <kbd>L</kbd> 랩 <kbd>R</kbd> 초기화</div>
 
   <div class="dock">
@@ -203,29 +209,47 @@
   const TRAVEL = 0.7;
   let STEP_MS = 10000;
 
-  const CITIES = [
-    {ko:'안디옥',en:'Antioch',lon:36.2,lat:36.2,ph:1,note:'제1차 여행의 출발 · 성령이 바울과 바나바를 따로 세우심',dx:-6,dy:-5,a:'end'},
-    {ko:'구브로',en:'Cyprus',lon:33.0,lat:34.9,ph:1,note:'바보에서 총독 서기오 바울이 믿음',dx:0,dy:11,a:'middle'},
-    {ko:'버가',en:'Perga',lon:30.8,lat:36.95,ph:1,note:'밤빌리아의 항구 도시',dx:-5,dy:11,a:'end'},
-    {ko:'이고니온',en:'Iconium',lon:32.5,lat:37.9,ph:1,note:'회당에서 담대히 복음을 전함',dx:6,dy:-3,a:'start'},
-    {ko:'루스드라',en:'Lystra',lon:32.4,lat:37.4,ph:1,note:'나면서 걷지 못하던 자가 일어남',dx:6,dy:7,a:'start'},
-    {ko:'드로아',en:'Troas',lon:26.1,lat:39.75,ph:2,note:'마게도냐 사람의 환상 · "건너와서 우리를 도우라"',dx:-5,dy:-4,a:'end'},
-    {ko:'빌립보',en:'Philippi',lon:24.3,lat:41.0,ph:2,note:'루디아와 간수의 가정이 믿음',dx:0,dy:-7,a:'middle'},
-    {ko:'데살로니가',en:'Thessalonica',lon:22.9,lat:40.6,ph:2,note:'세 안식일 동안 성경을 풀어 증거함',dx:-6,dy:-3,a:'end'},
-    {ko:'아덴',en:'Athens',lon:23.7,lat:38.0,ph:2,note:'아레오바고에서 알지 못하는 신을 전함',dx:6,dy:3,a:'start'},
-    {ko:'고린도',en:'Corinth',lon:22.9,lat:37.9,ph:2,note:'일 년 반을 머물며 교회를 세움',dx:-6,dy:9,a:'end'},
-    {ko:'에베소',en:'Ephesus',lon:27.3,lat:37.95,ph:3,note:'두란노 서원에서 두 해 동안 강론',dx:-5,dy:-5,a:'end'},
-    {ko:'밀레도',en:'Miletus',lon:27.3,lat:37.5,ph:3,note:'에베소 장로들과 눈물의 작별',dx:-6,dy:8,a:'end'},
-    {ko:'두로',en:'Tyre',lon:35.2,lat:33.3,ph:3,note:'제자들과 해변에서 기도함',dx:5,dy:1,a:'start'},
-    {ko:'가이사랴',en:'Caesarea',lon:34.9,lat:32.5,ph:3,note:'빌립의 집에 머묾',dx:-6,dy:2,a:'end'},
-    {ko:'예루살렘',en:'Jerusalem',lon:35.2,lat:31.8,ph:3,note:'체포되어 로마로 호송됨',dx:-6,dy:9,a:'end'},
-    {ko:'멜리데',en:'Malta',lon:14.4,lat:35.9,ph:4,note:'난파 후 독사를 떨어버림',dx:0,dy:10,a:'middle'},
-    {ko:'수라구사',en:'Syracuse',lon:15.3,lat:37.1,ph:4,note:'시칠리아에서 사흘을 머묾',dx:7,dy:3,a:'start'},
-    {ko:'보디올',en:'Puteoli',lon:14.1,lat:40.8,ph:4,note:'형제들을 만나 이레를 머묾',dx:-5,dy:3,a:'end'},
-    {ko:'로마',en:'Rome',lon:12.5,lat:41.9,ph:4,note:'땅 끝에서 담대히 하나님 나라를 전함',dx:-5,dy:-4,a:'end'},
+  const PHASES = [
+    {t:'1ST JOURNEY',name:'제1차 선교여행',view:{lon:33.6,lat:36.2,span:9}},
+    {t:'2ND JOURNEY',name:'제2차 선교여행',view:{lon:29.5,lat:38.9,span:17}},
+    {t:'3RD JOURNEY',name:'제3차 선교여행',view:{lon:31.5,lat:34.9,span:18.5}},
+    {t:'ROME VOYAGE',name:'로마 압송 항해',view:{lon:24,lat:37,span:26}},
   ];
-  const PH = {1:'1ST JOURNEY',2:'2ND JOURNEY',3:'3RD JOURNEY',4:'ROME VOYAGE'};
-  const MEDALS = [{n:'Ⅰ',t:'1차 여행',from:0,to:4},{n:'Ⅱ',t:'2차 여행',from:5,to:9},{n:'Ⅲ',t:'3차 여행',from:10,to:14},{n:'Ⅳ',t:'로마 항해',from:15,to:18}];
+  const c=(ph,ko,en,lon,lat,note,dx,dy,a)=>({ph,ko,en,lon,lat,note,dx,dy,a});
+  const ANT=(ph,note)=>c(ph,'안디옥','Antioch',36.2,36.2,note,-6,-5,'end');
+  const CITIES = [
+    ANT(1,'제1차 여행의 출발 · 성령이 바울과 바나바를 따로 세우심'),
+    c(1,'구브로','Cyprus',33.0,34.9,'바보에서 총독 서기오 바울이 믿음',0,11,'middle'),
+    c(1,'버가','Perga',30.8,36.95,'밤빌리아의 항구 도시',-5,11,'end'),
+    c(1,'이고니온','Iconium',32.5,37.9,'회당에서 담대히 복음을 전함',6,-3,'start'),
+    c(1,'루스드라','Lystra',32.4,37.4,'나면서 걷지 못하던 자가 일어남',6,7,'start'),
+
+    ANT(2,'제2차 여행의 출발 · 실라와 함께 교회를 굳게 함'),
+    c(2,'드로아','Troas',26.1,39.75,'마게도냐 사람의 환상 · "건너와서 우리를 도우라"',-5,-4,'end'),
+    c(2,'빌립보','Philippi',24.3,41.0,'루디아와 간수의 가정이 믿음',0,-7,'middle'),
+    c(2,'데살로니가','Thessalonica',22.9,40.6,'세 안식일 동안 성경을 풀어 증거함',-6,-3,'end'),
+    c(2,'아덴','Athens',23.7,38.0,'아레오바고에서 알지 못하는 신을 전함',6,3,'start'),
+    c(2,'고린도','Corinth',22.9,37.9,'일 년 반을 머물며 교회를 세움',-6,9,'end'),
+
+    ANT(3,'제3차 여행의 출발 · 여러 지방 제자들을 굳건하게 함'),
+    c(3,'에베소','Ephesus',27.3,37.95,'두란노 서원에서 두 해 동안 강론',-5,-5,'end'),
+    c(3,'밀레도','Miletus',27.3,37.5,'에베소 장로들과 눈물의 작별',-6,8,'end'),
+    c(3,'두로','Tyre',35.2,33.3,'제자들과 해변에서 기도함',5,1,'start'),
+    c(3,'가이사랴','Caesarea',34.9,32.5,'빌립의 집에 머묾',-6,2,'end'),
+    c(3,'예루살렘','Jerusalem',35.2,31.8,'체포되어 로마로 호송됨',-6,9,'end'),
+
+    c(4,'가이사랴','Caesarea',34.9,32.5,'죄수의 몸으로 로마를 향해 출항',-6,2,'end'),
+    c(4,'무라','Myra',30.0,36.26,'이탈리아로 가는 알렉산드리아 배로 갈아탐',-4,-6,'middle'),
+    c(4,'미항','Fair Havens',24.8,35.1,'그레데 · 유라굴로 광풍을 만남',0,11,'middle'),
+    c(4,'멜리데','Malta',14.4,35.9,'난파 후 독사를 떨어버림',0,10,'middle'),
+    c(4,'수라구사','Syracuse',15.3,37.1,'시칠리아에서 사흘을 머묾',7,3,'start'),
+    c(4,'보디올','Puteoli',14.1,40.8,'형제들을 만나 이레를 머묾',-5,3,'end'),
+    c(4,'로마','Rome',12.5,41.9,'땅 끝에서 담대히 하나님 나라를 전함',-5,-4,'end'),
+  ];
+  const N = CITIES.length;
+  const phaseRange = p => { const idx=CITIES.map((x,i)=>x.ph===p?i:-1).filter(i=>i>=0); return {from:idx[0],to:idx[idx.length-1]}; };
+  const MEDALS = [{n:'Ⅰ',t:'1차 여행'},{n:'Ⅱ',t:'2차 여행'},{n:'Ⅲ',t:'3차 여행'},{n:'Ⅳ',t:'로마 항해'}]
+    .map((m,i)=>({...m,...phaseRange(i+1)}));
 
   const LANDS = [
     [[26,40.5],[29,41.1],[33,42],[36,41.7],[38,41],[38,36.8],[36,36.2],[34,36.3],[30.5,36.6],[28,36.7],[26.3,38],[26.2,39.5]],
@@ -240,23 +264,55 @@
 
   const NS='http://www.w3.org/2000/svg', $=id=>document.getElementById(id);
   const X=lon=>(lon-10)*14.3, Y=lat=>(43-lat)*18.8;
-  const pts=CITIES.map(c=>({x:X(c.lon),y:Y(c.lat)})), N=CITIES.length;
+  const pts=CITIES.map(c=>({x:X(c.lon),y:Y(c.lat)}));
   const mk=(t,a,p)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);p&&p.appendChild(e);return e};
   const store={get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
 
   for(let i=1;i<8;i++)mk('line',{class:'grid',x1:i*50,y1:0,x2:i*50,y2:230},$('grid'));
   for(let i=1;i<5;i++)mk('line',{class:'grid',x1:0,y1:i*46,x2:400,y2:i*46},$('grid'));
   LANDS.forEach(p=>mk('polygon',{class:'land',points:p.map(q=>X(q[0])+','+Y(q[1])).join(' ')},$('lands')));
-  const dim=[],done=[],dots=[],labels=[];
-  for(let i=0;i<N-1;i++){
-    dim.push(mk('line',{class:'route-dim',x1:pts[i].x,y1:pts[i].y,x2:pts[i+1].x,y2:pts[i+1].y},$('routeDim')));
-    done.push(mk('line',{class:'route-done',x1:pts[i].x,y1:pts[i].y,x2:pts[i].x,y2:pts[i].y},$('routeDone')));
-  }
-  CITIES.forEach((c,i)=>{
-    dots.push(mk('circle',{class:'city-dot',cx:pts[i].x,cy:pts[i].y,r:2.6},$('cities')));
-    const t=mk('text',{class:'city-label',x:pts[i].x+c.dx,y:pts[i].y+c.dy,'text-anchor':c.a},$('cities'));
-    t.textContent=c.ko;labels.push(t);
+
+  const dim=[],done=[],dots=[],labels=[],groups=[];
+  PHASES.forEach((_,pi)=>groups.push(mk('g',{class:'ph'},$('phases'))));
+  CITIES.forEach((cty,i)=>{
+    const g=groups[cty.ph-1], same=i<N-1&&CITIES[i+1].ph===cty.ph;
+    dim[i]=same?mk('line',{class:'route-dim',x1:pts[i].x,y1:pts[i].y,x2:pts[i+1].x,y2:pts[i+1].y},g):null;
   });
+  CITIES.forEach((cty,i)=>{
+    const g=groups[cty.ph-1], same=i<N-1&&CITIES[i+1].ph===cty.ph;
+    done[i]=same?mk('line',{class:'route-done',x1:pts[i].x,y1:pts[i].y,x2:pts[i].x,y2:pts[i].y},g):null;
+  });
+  CITIES.forEach((cty,i)=>{
+    const g=groups[cty.ph-1];
+    dots[i]=mk('circle',{class:'city-dot',cx:pts[i].x,cy:pts[i].y},g);
+    labels[i]=mk('text',{class:'city-label','text-anchor':cty.a},g);labels[i].textContent=cty.ko;
+  });
+
+  // 지도 뷰(확대/이동) — 여행이 바뀔 때마다 해당 노선으로 이동
+  const viewOf=p=>{const v=PHASES[p-1].view;return {z:400/(v.span*14.3),cx:X(v.lon),cy:Y(v.lat)}};
+  let view=viewOf(1),curPhase=1,tweenId=0;
+  function applyView(){
+    const {z,cx,cy}=view;
+    $('world').setAttribute('transform',`translate(200 115) scale(${z}) translate(${-cx} ${-cy})`);
+    CITIES.forEach((cty,i)=>{
+      if(cty.ph!==curPhase)return;
+      dots[i].setAttribute('r',2.7/z);
+      labels[i].setAttribute('x',pts[i].x+cty.dx/z);labels[i].setAttribute('y',pts[i].y+cty.dy/z);
+      labels[i].style.fontSize=(9/z)+'px';labels[i].style.strokeWidth=(2.5/z)+'px';
+    });
+    $('pulse').setAttribute('r',4/z);
+  }
+  function setPhase(p,animate){
+    const from={...view},to=viewOf(p),prev=curPhase;curPhase=p;
+    groups.forEach((g,i)=>g.classList.toggle('on',i===p-1));
+    const id=++tweenId;
+    if(!animate||prev===p){view=to;applyView();return}
+    const t0=performance.now(),D=1200;
+    (function step(now){
+      if(id!==tweenId)return;const k=Math.min((now-t0)/D,1),e=ease(k);
+      view={z:from.z+(to.z-from.z)*e,cx:from.cx+(to.cx-from.cx)*e,cy:from.cy+(to.cy-from.cy)*e};applyView();
+      if(k<1)requestAnimationFrame(step)})(t0);
+  }
 
   const medalEls=MEDALS.map(m=>{
     const d=document.createElement('div');d.className='medal';
@@ -265,7 +321,7 @@
 
   let running=false,elapsed=0,startAt=0,raf=0,laps=[],lastLap=0,lastCity=-1,finished=false,sessionBase=0;
   let stats=store.get('paul-stats',{completions:0,totalMs:0});
-  const ease=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+  function ease(t){return t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2}
   const p2=n=>String(n).padStart(2,'0');
   function fmt(ms){const t=Math.floor(ms),h=Math.floor(t/3600000),m=Math.floor(t%3600000/60000),s=Math.floor(t%60000/1000),cs=Math.floor(t%1000/10);
     return {h,m:p2(m),s:p2(s),cs:p2(cs),str:(h?h+':':'')+`${p2(m)}:${p2(s)}.${p2(cs)}`}}
@@ -274,6 +330,7 @@
   function renderStats(){
     $('stComp').textContent=stats.completions;
     const tm=Math.floor(stats.totalMs/60000);$('stTotal').textContent=tm>=60?`${Math.floor(tm/60)}h ${p2(tm%60)}m`:`${p2(tm)}m`;
+    $('stN').textContent=N;
   }
 
   function render(){
@@ -281,15 +338,17 @@
     $('hh').textContent=f.h?f.h+':':'';$('mm').textContent=f.m;$('ss').textContent=f.s;$('cs').textContent='.'+f.cs;
     const seg=Math.floor(elapsed/STEP_MS),within=(elapsed%STEP_MS)/STEP_MS;
     let cur,px,py;
-    if(seg>=N-1){cur=N-1;px=pts[cur].x;py=pts[cur].y;for(let i=0;i<N-1;i++){done[i].setAttribute('x2',pts[i+1].x);done[i].setAttribute('y2',pts[i+1].y)}}
+    if(seg>=N-1){cur=N-1;px=pts[cur].x;py=pts[cur].y;done.forEach((l,i)=>{if(l){l.setAttribute('x2',pts[i+1].x);l.setAttribute('y2',pts[i+1].y)}})}
     else{
-      const k=Math.min(within/TRAVEL,1),e=ease(k);
-      px=pts[seg].x+(pts[seg+1].x-pts[seg].x)*e;py=pts[seg].y+(pts[seg+1].y-pts[seg].y)*e;
+      const k=Math.min(within/TRAVEL,1),e=ease(k),cross=CITIES[seg].ph!==CITIES[seg+1].ph;
       cur=k>=1?seg+1:seg;
-      for(let i=0;i<N-1;i++){const r=i<seg?1:i===seg?e:0;
-        done[i].setAttribute('x2',pts[i].x+(pts[i+1].x-pts[i].x)*r);done[i].setAttribute('y2',pts[i].y+(pts[i+1].y-pts[i].y)*r)}
+      if(cross){const t=cur===seg?seg:seg+1;px=pts[t].x;py=pts[t].y}
+      else{px=pts[seg].x+(pts[seg+1].x-pts[seg].x)*e;py=pts[seg].y+(pts[seg+1].y-pts[seg].y)*e}
+      done.forEach((l,i)=>{if(!l)return;const r=i<seg?1:i===seg?e:0;
+        l.setAttribute('x2',pts[i].x+(pts[i+1].x-pts[i].x)*r);l.setAttribute('y2',pts[i].y+(pts[i+1].y-pts[i].y)*r)});
     }
-    $('paul').setAttribute('transform',`translate(${px} ${py})`);
+    const ph=CITIES[cur].ph;if(ph!==curPhase)setPhase(ph,running);
+    $('paul').setAttribute('transform',`translate(${px} ${py}) scale(${1/view.z})`);
     dots.forEach((d,i)=>d.setAttribute('class','city-dot'+(i===cur?' current':i<cur?' visited':'')));
     labels.forEach((l,i)=>l.setAttribute('class','city-label'+(i===cur?' current':i<cur?' visited':'')));
     $('stCity').textContent=cur+1;
@@ -300,19 +359,21 @@
     if(cur!==lastCity){const first=lastCity===-1;lastCity=cur;arrive(cur,!first)}
     const n=$('note');
     if(cur>=N-1)n.textContent='여정 완료 · 땅 끝 로마에 이르렀습니다';
-    else if(running){const left=(STEP_MS-(elapsed%STEP_MS))/1000;n.textContent=`다음 ${CITIES[cur===seg?seg+1:seg+1].ko}까지 ${left<60?left.toFixed(1)+'s':Math.floor(left/60)+'m '+p2(Math.floor(left%60))+'s'}`}
+    else if(running){const left=Math.max(0,((cur+TRAVEL)*STEP_MS-elapsed)/1000),nx=CITIES[cur+1];
+      n.textContent=`다음 ${nx.ph!==CITIES[cur].ph?PHASES[nx.ph-1].name+' · ':''}${nx.ko}까지 ${left<60?left.toFixed(1)+'s':Math.floor(left/60)+'m '+p2(Math.floor(left%60))+'s'}`}
     else if(elapsed>0)n.textContent=`일시정지 · ${CITIES[cur].ko}에서 멈춤`;
     else n.textContent='START를 눌러 여정을 시작하세요';
     if(cur>=N-1&&!finished&&running)complete();
   }
 
   function arrive(i,announce){
-    const c=CITIES[i];
-    $('cityName').textContent=c.ko;$('cityEn').textContent=c.en.toUpperCase();$('badge').textContent=PH[c.ph];
+    const cty=CITIES[i],startOfPhase=i===0||CITIES[i-1].ph!==cty.ph;
+    $('cityName').textContent=cty.ko;$('cityEn').textContent=cty.en.toUpperCase();$('badge').textContent=PHASES[cty.ph-1].t;
     const cn=$('cityName');cn.classList.remove('flash');void cn.offsetWidth;cn.classList.add('flash');
     const p=$('pulse');p.setAttribute('cx',pts[i].x);p.setAttribute('cy',pts[i].y);p.classList.remove('go');void p.getBoundingClientRect();p.classList.add('go');
-    if(announce){const t=$('toast');t.textContent=`${c.ko} 도착 — ${c.note.split('·')[0].trim()}`;t.classList.remove('show');void t.offsetWidth;t.classList.add('show');buzz(40)}
-    $('note').dataset.last=c.note;
+    if(announce){const t=$('toast');
+      t.textContent=startOfPhase?`${PHASES[cty.ph-1].name} 시작 — ${cty.ko}`:`${cty.ko} 도착 — ${cty.note.split('·')[0].trim()}`;
+      t.classList.remove('show');void t.offsetWidth;t.classList.add('show');buzz(startOfPhase?[40,40,40]:40)}
   }
 
   function complete(){
@@ -337,9 +398,9 @@
   }
   function reset(){
     if(running)return;elapsed=0;lastLap=0;laps=[];lastCity=-1;finished=false;sessionBase=0;
-    for(let i=0;i<N-1;i++){done[i].setAttribute('x2',pts[i].x);done[i].setAttribute('y2',pts[i].y)}
+    done.forEach((l,i)=>{if(l){l.setAttribute('x2',pts[i].x);l.setAttribute('y2',pts[i].y)}});
     $('time').classList.remove('paused');medalEls.forEach(m=>m.classList.remove('done','pop'));
-    render();$('resetBtn').disabled=true;document.querySelectorAll('.chip').forEach(c=>c.disabled=false);
+    setPhase(1,false);render();$('resetBtn').disabled=true;document.querySelectorAll('.chip').forEach(c=>c.disabled=false);
     $('laps').innerHTML='';$('laps').appendChild($('lapsEmpty'));buzz(20)
   }
   function lap(){
@@ -357,15 +418,14 @@
 
   document.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{
     if(running||elapsed>0)return;STEP_MS=+c.dataset.step*1000;
-    document.querySelectorAll('.chip').forEach(x=>x.setAttribute('aria-pressed',x===c));
-    $('laps').firstChild;render()});
+    document.querySelectorAll('.chip').forEach(x=>x.setAttribute('aria-pressed',x===c));render()});
   document.querySelectorAll('.btn').forEach(b=>b.addEventListener('pointerdown',e=>{
     const r=b.getBoundingClientRect(),s=Math.max(r.width,r.height),d=document.createElement('span');d.className='ripple';
     d.style.cssText=`width:${s/3}px;height:${s/3}px;left:${e.clientX-r.left-s/6}px;top:${e.clientY-r.top-s/6}px`;b.appendChild(d);setTimeout(()=>d.remove(),600)}));
   $('startBtn').onclick=toggle;$('resetBtn').onclick=reset;$('lapBtn').onclick=lap;
   document.addEventListener('keydown',e=>{if(e.code==='Space'){e.preventDefault();toggle()}else if(e.key.toLowerCase()==='l')lap();else if(e.key.toLowerCase()==='r')reset()});
   document.addEventListener('visibilitychange',()=>{if(running&&document.visibilityState==='visible')lock(true)});
-  renderStats();render();
+  setPhase(1,false);renderStats();render();
 </script>
 </body>
 </html>
